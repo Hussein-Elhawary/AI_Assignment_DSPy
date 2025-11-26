@@ -1,0 +1,8 @@
+dspy-ai>=2.4.0
+langgraph>=0.1.0
+langchain-core
+pydantic
+rank-bm25
+numpy
+pandas
+scikit-learn
