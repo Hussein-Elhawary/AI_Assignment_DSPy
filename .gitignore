@@ -1,0 +1,10 @@
+# Ignore Python bytecode cache files
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+
+# Optional caches related to testing/type checking
+.pytest_cache/
+.mypy_cache/

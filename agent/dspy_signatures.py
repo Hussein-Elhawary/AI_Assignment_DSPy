@@ -3,13 +3,22 @@ from typing import List
 
 
 # Configure DSPy to use local Ollama model
-dspy.settings.configure(
-    lm=dspy.OllamaLocal(
+try:
+    # Try newer DSPy API
+    lm = dspy.Ollama(
         model="phi3.5:3.8b-mini-instruct-q4_K_M",
         base_url="http://localhost:11434",
         max_tokens=2000
     )
-)
+except AttributeError:
+    # Fallback to alternative naming
+    lm = dspy.LM(
+        model="ollama/phi3.5:3.8b-mini-instruct-q4_K_M",
+        api_base="http://localhost:11434",
+        max_tokens=2000
+    )
+
+dspy.settings.configure(lm=lm)
 
 
 class RouterSignature(dspy.Signature):
@@ -69,7 +78,19 @@ class SQLGeneratorModule(dspy.Module):
     
     def __init__(self):
         super().__init__()
-        self.generator = dspy.ChainOfThought(SQLGeneratorSignature)
+        # Try to load optimized version if it exists
+        import os
+        optimized_path = os.path.join(
+            os.path.dirname(__file__), 
+            "sql_gen_optimized.json"
+        )
+        
+        if os.path.exists(optimized_path):
+            print(f"Loading optimized SQL Generator from {optimized_path}")
+            self.generator = dspy.ChainOfThought(SQLGeneratorSignature)
+            self.generator.load(optimized_path)
+        else:
+            self.generator = dspy.ChainOfThought(SQLGeneratorSignature)
     
     def forward(self, question: str, schema: str, constraints: str = "") -> str:
         """

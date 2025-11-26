@@ -1,6 +1,11 @@
 from typing import TypedDict, List, Dict, Any, Literal
 from langgraph.graph import StateGraph, END
 import json
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.dspy_signatures import RouterModule, SQLGeneratorModule, SynthesizerModule
 from agent.rag.retrieval import LocalRetriever
