@@ -115,15 +115,12 @@ def sql_gen_node(state: AgentState) -> AgentState:
 def executor_node(state: AgentState) -> AgentState:
     """Execute the SQL query."""
     sql_query = state["sql_query"]
-    print(f"\nExecuting SQL: {sql_query}")
     result = db_tool.execute_query(sql_query)
-    print(f"SQL Result: {result}")
     state["sql_result"] = result
     
     # Track error count
     if result.get("error"):
         state["error_count"] = state.get("error_count", 0) + 1
-        print(f"SQL Error (attempt {state['error_count']}): {result.get('error')}")
     
     return state
 
@@ -221,15 +218,11 @@ def route_after_executor(state: AgentState) -> Literal["sql_gen_node", "synthesi
     has_error = bool(state["sql_result"].get("error"))
     error_count = state.get("error_count", 0)
     
-    print(f"\nRoute decision: has_error={has_error}, error_count={error_count}")
-    
     if has_error and error_count < 2:
         # Retry SQL generation
-        print("-> Retrying SQL generation")
         return "sql_gen_node"
     else:
         # Proceed to synthesis
-        print("-> Proceeding to synthesizer")
         return "synthesizer_node"
 
 

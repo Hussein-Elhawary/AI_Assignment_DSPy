@@ -1,86 +1,67 @@
 # Retail Analytics AI Agent
 
-A local AI agent built with DSPy, LangGraph, and Ollama for retail analytics on the Northwind database.
+A local AI agent built with **DSPy**, **LangGraph**, and **llama-cpp-python** for answering retail analytics questions using hybrid RAG + SQL approaches.
+
+---
 
 ## Graph Design
 
-- **Entry → Router**: Routes questions to RAG, SQL, or Hybrid pathways based on question type
-- **Dual Pathways**: 
-  - RAG path: Router → Retriever → Synthesizer
-  - SQL path: Router → Planner → SQL Gen → Executor → Synthesizer (with error repair loop)
-  - Hybrid: Retriever → Planner → SQL Gen → Executor → Synthesizer
-- **Repair Loop**: SQL errors trigger retry at SQL Gen node (max 2 attempts) with error feedback
-- **Convergence**: All paths merge at Synthesizer → END, producing final answer with citations
+The agent uses a **stateful LangGraph workflow** with the following flow:
 
-## DSPy Optimization
+- **Router Node**: Analyzes the question and routes to appropriate tools (`rag`, `sql`, or `hybrid`)
+- **Retrieval Node**: Retrieves relevant documentation chunks using BM25 (for RAG or hybrid routes)
+- **Planner Node**: Extracts constraints from retrieved docs to guide SQL generation
+- **SQL Generator Node**: Generates SQLite queries using DSPy with schema awareness and error feedback
+- **Executor Node**: Executes SQL queries against the Northwind database
+- **SQL Repair Loop**: If SQL execution fails, the error is fed back to the generator (max 2 retries)
+- **Synthesizer Node**: Combines SQL results and/or RAG context to generate final answer with citations
 
-**Component Optimized**: `SQLGeneratorModule`
+**Flow**: Entry → Router → [Retrieval → Planner] → SQL Generator ⇄ Executor (repair loop) → Synthesizer → END
 
-**Method**: BootstrapFewShot with 5 training examples covering JOINs, aggregations, and filters
+---
 
-**Metric**: `validate_sql` - validates SQL execution against actual database
+## DSPy Impact
 
-**Before vs After**:
-```
-[Manual fill-in after running evaluation]
-Before optimization: X% success rate
-After optimization:  Y% success rate
-```
+**Optimized Module**: SQLGenerator
+
+**Metric Delta**: [Fill in your results here, e.g., 60% → 80% valid SQL execution]
+
+DSPy's `BootstrapFewShot` optimizer was used to refine the SQL Generator module with 5 training examples. The optimization improves SQL validity and reduces retry attempts by learning from successful query patterns.
+
+---
 
 ## Trade-offs & Assumptions
 
-- **CostOfGoods Assumption**: When CostOfGoods column is missing, it is approximated as `0.7 * UnitPrice`
-- **Retry Limit**: SQL error repair is limited to 2 attempts to prevent infinite loops
-- **Local LLM**: Uses Ollama (phi3.5) for complete local execution - no external API calls
-- **Simple BM25 Retrieval**: Uses rank-bm25 instead of embeddings for faster, dependency-light retrieval
+### Assumptions
+- **CostOfGoods**: Approximated as `0.7 * UnitPrice` if missing from the database
+- **Local Model**: Using local GGUF model (`phi3.5:3.8b-mini-instruct-q4_K_M`) via `llama-cpp-python` due to local constraints and to avoid external API dependencies
 
-## Setup & Usage
+### Trade-offs
+- **Model Size**: Using quantized 4-bit model (2.3GB) balances performance with hardware constraints
+- **CPU Inference**: Running on CPU (`n_gpu_layers=0`) for compatibility; GPU would improve speed
+- **Retry Limit**: SQL repair loop limited to 2 retries to prevent infinite loops
+- **Date Handling**: SQLite requires `strftime('%Y', date)` instead of standard SQL `YEAR()` function
+
+---
+
+## Setup & Run
 
 ### Prerequisites
-```bash
-# Install Ollama from https://ollama.com/download
-# Download the model
-ollama pull phi3.5
-```
+- Python 3.8+
+- 4GB+ RAM (8GB+ recommended for smooth inference)
 
 ### Installation
-```bash
-pip install -r requirements.txt
-```
 
-### (Optional) Optimize SQL Generator
-```bash
-python agent/optimize_refine.py
-```
+1. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Run Agent
-```bash
-python run_agent_hybrid.py --batch sample_questions_hybrid_eval.jsonl --out outputs_hybrid.jsonl
-```
+2. **Download the model**:
+   - Download `phi3.5:3.8b-mini-instruct-q4_K_M` GGUF model (~2.3GB)
+   - Place it in: `models/phi3.5.gguf`
 
-## Project Structure
-
-```
-.
-├── agent/
-│   ├── dspy_signatures.py      # DSPy signatures and modules
-│   ├── graph_hybrid.py          # LangGraph state machine
-│   ├── optimize_refine.py       # DSPy optimization script
-│   └── rag/
-│       ├── retrieval.py         # BM25-based retriever
-│       └── tools/
-│           └── sqlite_tool.py   # Database interface
-├── data/
-│   └── northwind.sqlite         # Northwind database
-├── docs/
-│   └── *.md                     # Documentation files (4 required)
-├── requirements.txt
-└── run_agent_hybrid.py          # Main entry point
-```
-
-## Environment Validation
-
-Check your setup:
-```bash
-python check_env.py
-```
+3. **Run the agent**:
+   ```bash
+   python run_agent_hybrid.py --batch sample_questions_hybrid_eval.jsonl --out outputs_hybrid.jsonl
+   ```
