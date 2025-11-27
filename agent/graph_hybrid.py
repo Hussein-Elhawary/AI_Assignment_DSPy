@@ -38,11 +38,15 @@ synthesizer = SynthesizerModule()
 # Node Implementations
 def router_node(state: AgentState) -> AgentState:
     """Route the question to appropriate tool(s)."""
-    tool_choice = router_module.forward(question=state["question"])
-    # Normalize the choice
-    tool_choice = tool_choice.lower().strip()
-    if tool_choice not in ["rag", "sql", "hybrid"]:
-        tool_choice = "hybrid"  # Default fallback
+    try:
+        tool_choice = router_module.forward(question=state["question"])
+        # Normalize the choice
+        tool_choice = tool_choice.lower().strip()
+        if tool_choice not in ["rag", "sql", "hybrid"]:
+            tool_choice = "hybrid"  # Default fallback
+    except Exception as e:
+        print(f"Router error: {e}, defaulting to hybrid")
+        tool_choice = "hybrid"
     
     state["route"] = tool_choice
     return state
@@ -69,24 +73,34 @@ def planner_node(state: AgentState) -> AgentState:
 
 def sql_gen_node(state: AgentState) -> AgentState:
     """Generate SQL query using DSPy with error feedback."""
-    schema = db_tool.get_schema()
+    try:
+        schema = db_tool.get_schema()
+        
+        # Build constraints including error feedback if exists
+        constraints = "Use standard SQL syntax. Table names with spaces use [brackets]. Join tables appropriately."
+        
+        # If there was a previous error, include it in the context
+        if state.get("sql_result") and state["sql_result"].get("error"):
+            previous_query = state.get("sql_query", "")
+            error_msg = state["sql_result"]["error"]
+            constraints += f"\n\nPrevious query failed:\nQuery: {previous_query}\nError: {error_msg}\nPlease fix the error and generate a corrected query."
+        
+        sql_query = sql_generator.forward(
+            question=state["question"],
+            schema=schema,
+            constraints=constraints
+        )
+        
+        # Clean up the SQL query
+        sql_query = sql_query.strip()
+        
+        state["sql_query"] = sql_query
+    except Exception as e:
+        print(f"SQL generation error: {e}")
+        # Provide a simple fallback query
+        state["sql_query"] = "SELECT 'Error generating query' as error"
+        state["sql_result"] = {"error": str(e), "rows": [], "columns": []}
     
-    # Build constraints including error feedback if exists
-    constraints = "Use standard SQL syntax. Join tables appropriately."
-    
-    # If there was a previous error, include it in the context
-    if state.get("sql_result") and state["sql_result"].get("error"):
-        previous_query = state.get("sql_query", "")
-        error_msg = state["sql_result"]["error"]
-        constraints += f"\n\nPrevious query failed:\nQuery: {previous_query}\nError: {error_msg}\nPlease fix the error and generate a corrected query."
-    
-    sql_query = sql_generator.forward(
-        question=state["question"],
-        schema=schema,
-        constraints=constraints
-    )
-    
-    state["sql_query"] = sql_query
     return state
 
 
@@ -100,57 +114,65 @@ def executor_node(state: AgentState) -> AgentState:
 
 def synthesizer_node(state: AgentState) -> AgentState:
     """Synthesize final answer from SQL data and/or RAG context."""
-    # Prepare SQL data as string
-    sql_data = ""
-    if state.get("sql_result"):
+    try:
+        # Prepare SQL data as string
+        sql_data = ""
+        if state.get("sql_result"):
+            if state["sql_result"].get("error"):
+                sql_data = f"SQL Error: {state['sql_result']['error']}"
+            else:
+                sql_data = json.dumps({
+                    "columns": state["sql_result"].get("columns", []),
+                    "rows": state["sql_result"].get("rows", [])
+                }, indent=2)
+        
+        # Prepare context from retrieved docs
+        context = [doc["content"] for doc in state.get("retrieved_docs", [])]
+        
+        # Get format hint
+        format_hint = state.get("format_hint", "Provide a clear, concise answer.")
+        
+        # Synthesize answer
+        result = synthesizer.forward(
+            question=state["question"],
+            sql_data=sql_data,
+            context=context,
+            format_hint=format_hint
+        )
+        
+        state["final_answer"] = result["final_answer"]
+        state["explanation"] = result["explanation"]
+        
+        # Generate citations
+        citations = []
+        # Add doc IDs from retrieved docs
+        for doc in state.get("retrieved_docs", []):
+            citations.append(doc["doc_id"])
+        
+        # Add table names from SQL query if available
+        if state.get("sql_query") and not state["sql_result"].get("error"):
+            # Simple extraction of table names (could be more sophisticated)
+            tables = ["Orders", "Order Details", "Products", "Customers"]
+            for table in tables:
+                if table in state["sql_query"]:
+                    citations.append(f"Table: {table}")
+        
+        state["citations"] = list(set(citations))  # Remove duplicates
+        
+        # Set confidence (simple heuristic)
         if state["sql_result"].get("error"):
-            sql_data = f"SQL Error: {state['sql_result']['error']}"
+            state["confidence"] = 0.3
+        elif state.get("retrieved_docs") and len(state["retrieved_docs"]) > 0:
+            state["confidence"] = 0.9
         else:
-            sql_data = json.dumps({
-                "columns": state["sql_result"].get("columns", []),
-                "rows": state["sql_result"].get("rows", [])
-            }, indent=2)
-    
-    # Prepare context from retrieved docs
-    context = [doc["content"] for doc in state.get("retrieved_docs", [])]
-    
-    # Get format hint
-    format_hint = state.get("format_hint", "Provide a clear, concise answer.")
-    
-    # Synthesize answer
-    result = synthesizer.forward(
-        question=state["question"],
-        sql_data=sql_data,
-        context=context,
-        format_hint=format_hint
-    )
-    
-    state["final_answer"] = result["final_answer"]
-    state["explanation"] = result["explanation"]
-    
-    # Generate citations
-    citations = []
-    # Add doc IDs from retrieved docs
-    for doc in state.get("retrieved_docs", []):
-        citations.append(doc["doc_id"])
-    
-    # Add table names from SQL query if available
-    if state.get("sql_query") and not state["sql_result"].get("error"):
-        # Simple extraction of table names (could be more sophisticated)
-        tables = ["Orders", "Order Details", "Products", "Customers"]
-        for table in tables:
-            if table in state["sql_query"]:
-                citations.append(f"Table: {table}")
-    
-    state["citations"] = list(set(citations))  # Remove duplicates
-    
-    # Set confidence (simple heuristic)
-    if state["sql_result"].get("error"):
-        state["confidence"] = 0.3
-    elif state.get("retrieved_docs") and len(state["retrieved_docs"]) > 0:
-        state["confidence"] = 0.9
-    else:
-        state["confidence"] = 0.7
+            state["confidence"] = 0.7
+            
+    except Exception as e:
+        print(f"Synthesizer error: {e}")
+        state["final_answer"] = "Unable to generate answer due to processing error."
+        state["explanation"] = f"Error: {str(e)}"
+        state["confidence"] = 0.1
+        state["citations"] = []
     
     return state
 

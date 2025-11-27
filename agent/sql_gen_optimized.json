@@ -1,0 +1,63 @@
+{
+  "predict": {
+    "traces": [],
+    "train": [],
+    "demos": [
+      {
+        "augmented": true,
+        "question": "How many products are in the Beverages category?",
+        "schema": "CREATE TABLE [Orders](\n   [OrderID]INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n   [CustomerID]TEXT,\n   [EmployeeID]INTEGER,\n   [OrderDate]DATETIME,\n   [RequiredDate]DATETIME,\n   [ShippedDate]DATETIME,\n   [ShipVia]INTEGER,\n   [Freight]NUMERIC DEFAULT 0,\n   [ShipName]TEXT,\n   [ShipAddress]TEXT,\n   [ShipCity]TEXT,\n   [ShipRegion]TEXT,\n   [ShipPostalCode]TEXT,\n   [ShipCountry]TEXT,\n   FOREIGN KEY ([EmployeeID]) REFERENCES [Employees] ([EmployeeID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([CustomerID]) REFERENCES [Customers] ([CustomerID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([ShipVia]) REFERENCES [Shippers] ([ShipperID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Order Details](\n   [OrderID]INTEGER NOT NULL,\n   [ProductID]INTEGER NOT NULL,\n   [UnitPrice]NUMERIC NOT NULL DEFAULT 0,\n   [Quantity]INTEGER NOT NULL DEFAULT 1,\n   [Discount]REAL NOT NULL DEFAULT 0,\n    PRIMARY KEY (\"OrderID\",\"ProductID\"),\n    CHECK ([Discount]>=(0) AND [Discount]<=(1)),\n    CHECK ([Quantity]>(0)),\n    CHECK ([UnitPrice]>=(0)),\n\tFOREIGN KEY ([OrderID]) REFERENCES [Orders] ([OrderID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([ProductID]) REFERENCES [Products] ([ProductID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Products](\n   [ProductID]INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n   [ProductName]TEXT NOT NULL,\n   [SupplierID]INTEGER,\n   [CategoryID]INTEGER,\n   [QuantityPerUnit]TEXT,\n   [UnitPrice]NUMERIC DEFAULT 0,\n   [UnitsInStock]INTEGER DEFAULT 0,\n   [UnitsOnOrder]INTEGER DEFAULT 0,\n   [ReorderLevel]INTEGER DEFAULT 0,\n   [Discontinued]TEXT NOT NULL DEFAULT '0',\n    CHECK ([UnitPrice]>=(0)),\n    CHECK ([ReorderLevel]>=(0)),\n    CHECK ([UnitsInStock]>=(0)),\n    CHECK ([UnitsOnOrder]>=(0)),\n\tFOREIGN KEY ([CategoryID]) REFERENCES [Categories] ([CategoryID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([SupplierID]) REFERENCES [Suppliers] ([SupplierID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Customers]\n(      [CustomerID] TEXT,\n       [CompanyName] TEXT,\n       [ContactName] TEXT,\n       [ContactTitle] TEXT,\n       [Address] TEXT,\n       [City] TEXT,\n       [Region] TEXT,\n       [PostalCode] TEXT,\n       [Country] TEXT,\n       [Phone] TEXT,\n       [Fax] TEXT,\n       PRIMARY KEY (`CustomerID`)\n)",
+        "constraints": "Use standard SQL syntax. Join tables appropriately.",
+        "reasoning": "To find out how many products are in the Beverages category, we need to join the Products table with a hypothetical Categories table. Since there is no explicit mention of such a relationship being established within the provided schema (as typically CategoryID would be part of the [Categories] or similar structure), I'm assuming that each product has an associated category and that this association will exist in some way, possibly as mentioned above but not explicitly defined here. The goal is to count all products where their corresponding Categories match 'Beverages'.",
+        "sql_query": "SELECT COUNT(*) AS beverage_count\nFROM Products p\nJOIN [Categories] c ON p.CategoryID = c.[CategoryID]\nWHERE c.[CategoryName] = 'Beverages'"
+      },
+      {
+        "augmented": true,
+        "question": "List the top 5 customers by number of orders",
+        "schema": "CREATE TABLE [Orders](\n   [OrderID]INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n   [CustomerID]TEXT,\n   [EmployeeID]INTEGER,\n   [OrderDate]DATETIME,\n   [RequiredDate]DATETIME,\n   [ShippedDate]DATETIME,\n   [ShipVia]INTEGER,\n   [Freight]NUMERIC DEFAULT 0,\n   [ShipName]TEXT,\n   [ShipAddress]TEXT,\n   [ShipCity]TEXT,\n   [ShipRegion]TEXT,\n   [ShipPostalCode]TEXT,\n   [ShipCountry]TEXT,\n   FOREIGN KEY ([EmployeeID]) REFERENCES [Employees] ([EmployeeID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([CustomerID]) REFERENCES [Customers] ([CustomerID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([ShipVia]) REFERENCES [Shippers] ([ShipperID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Order Details](\n   [OrderID]INTEGER NOT NULL,\n   [ProductID]INTEGER NOT NULL,\n   [UnitPrice]NUMERIC NOT NULL DEFAULT 0,\n   [Quantity]INTEGER NOT NULL DEFAULT 1,\n   [Discount]REAL NOT NULL DEFAULT 0,\n    PRIMARY KEY (\"OrderID\",\"ProductID\"),\n    CHECK ([Discount]>=(0) AND [Discount]<=(1)),\n    CHECK ([Quantity]>(0)),\n    CHECK ([UnitPrice]>=(0)),\n\tFOREIGN KEY ([OrderID]) REFERENCES [Orders] ([OrderID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([ProductID]) REFERENCES [Products] ([ProductID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Products](\n   [ProductID]INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n   [ProductName]TEXT NOT NULL,\n   [SupplierID]INTEGER,\n   [CategoryID]INTEGER,\n   [QuantityPerUnit]TEXT,\n   [UnitPrice]NUMERIC DEFAULT 0,\n   [UnitsInStock]INTEGER DEFAULT 0,\n   [UnitsOnOrder]INTEGER DEFAULT 0,\n   [ReorderLevel]INTEGER DEFAULT 0,\n   [Discontinued]TEXT NOT NULL DEFAULT '0',\n    CHECK ([UnitPrice]>=(0)),\n    CHECK ([ReorderLevel]>=(0)),\n    CHECK ([UnitsInStock]>=(0)),\n    CHECK ([UnitsOnOrder]>=(0)),\n\tFOREIGN KEY ([CategoryID]) REFERENCES [Categories] ([CategoryID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([SupplierID]) REFERENCES [Suppliers] ([SupplierID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Customers]\n(      [CustomerID] TEXT,\n       [CompanyName] TEXT,\n       [ContactName] TEXT,\n       [ContactTitle] TEXT,\n       [Address] TEXT,\n       [City] TEXT,\n       [Region] TEXT,\n       [PostalCode] TEXT,\n       [Country] TEXT,\n       [Phone] TEXT,\n       [Fax] TEXT,\n       PRIMARY KEY (`CustomerID`)\n)",
+        "constraints": "Use standard SQL syntax. Join tables appropriately.",
+        "reasoning": "To find the top 5 customers by number of orders, we need to count the number of orders each customer has placed. This requires joining the 'Orders' table with the 'Customers' table on CustomerID and then grouping the results by CustomerID while counting the occurrences (orders) for each one. Finally, we will order the result in descending order based on this count to get the top 5 customers with the most orders.",
+        "sql_query": "SELECT c.CustomerID, COUNT(o.OrderID) as number_of_orders\nFROM Orders o\nJOIN Customers c ON o.CustomerID = c.CustomerID\nGROUP BY c.CustomerID\nORDER BY number_of_orders DESC\nLIMIT 5;"
+      },
+      {
+        "question": "How many orders were shipped to France in 1997?",
+        "schema": "CREATE TABLE [Orders](\n   [OrderID]INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n   [CustomerID]TEXT,\n   [EmployeeID]INTEGER,\n   [OrderDate]DATETIME,\n   [RequiredDate]DATETIME,\n   [ShippedDate]DATETIME,\n   [ShipVia]INTEGER,\n   [Freight]NUMERIC DEFAULT 0,\n   [ShipName]TEXT,\n   [ShipAddress]TEXT,\n   [ShipCity]TEXT,\n   [ShipRegion]TEXT,\n   [ShipPostalCode]TEXT,\n   [ShipCountry]TEXT,\n   FOREIGN KEY ([EmployeeID]) REFERENCES [Employees] ([EmployeeID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([CustomerID]) REFERENCES [Customers] ([CustomerID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([ShipVia]) REFERENCES [Shippers] ([ShipperID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Order Details](\n   [OrderID]INTEGER NOT NULL,\n   [ProductID]INTEGER NOT NULL,\n   [UnitPrice]NUMERIC NOT NULL DEFAULT 0,\n   [Quantity]INTEGER NOT NULL DEFAULT 1,\n   [Discount]REAL NOT NULL DEFAULT 0,\n    PRIMARY KEY (\"OrderID\",\"ProductID\"),\n    CHECK ([Discount]>=(0) AND [Discount]<=(1)),\n    CHECK ([Quantity]>(0)),\n    CHECK ([UnitPrice]>=(0)),\n\tFOREIGN KEY ([OrderID]) REFERENCES [Orders] ([OrderID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([ProductID]) REFERENCES [Products] ([ProductID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Products](\n   [ProductID]INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n   [ProductName]TEXT NOT NULL,\n   [SupplierID]INTEGER,\n   [CategoryID]INTEGER,\n   [QuantityPerUnit]TEXT,\n   [UnitPrice]NUMERIC DEFAULT 0,\n   [UnitsInStock]INTEGER DEFAULT 0,\n   [UnitsOnOrder]INTEGER DEFAULT 0,\n   [ReorderLevel]INTEGER DEFAULT 0,\n   [Discontinued]TEXT NOT NULL DEFAULT '0',\n    CHECK ([UnitPrice]>=(0)),\n    CHECK ([ReorderLevel]>=(0)),\n    CHECK ([UnitsInStock]>=(0)),\n    CHECK ([UnitsOnOrder]>=(0)),\n\tFOREIGN KEY ([CategoryID]) REFERENCES [Categories] ([CategoryID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION,\n\tFOREIGN KEY ([SupplierID]) REFERENCES [Suppliers] ([SupplierID]) \n\t\tON DELETE NO ACTION ON UPDATE NO ACTION\n)\n\nCREATE TABLE [Customers]\n(      [CustomerID] TEXT,\n       [CompanyName] TEXT,\n       [ContactName] TEXT,\n       [ContactTitle] TEXT,\n       [Address] TEXT,\n       [City] TEXT,\n       [Region] TEXT,\n       [PostalCode] TEXT,\n       [Country] TEXT,\n       [Phone] TEXT,\n       [Fax] TEXT,\n       PRIMARY KEY (`CustomerID`)\n)",
+        "constraints": "Use standard SQL syntax. Join tables appropriately.",
+        "sql_query": "SELECT COUNT(*) as order_count\nFROM Orders\nWHERE ShipCountry = 'France'\nAND strftime('%Y', OrderDate) = '1997'"
+      }
+    ],
+    "signature": {
+      "instructions": "Generate SQL query based on the question, database schema, and constraints.\n\nImportant: If CostOfGoods is missing, assume it is 0.7 * UnitPrice.",
+      "fields": [
+        {
+          "prefix": "Question:",
+          "description": "User's question requiring SQL query"
+        },
+        {
+          "prefix": "Schema:",
+          "description": "Database schema with table definitions"
+        },
+        {
+          "prefix": "Constraints:",
+          "description": "Additional constraints or rules for query generation"
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Sql Query:",
+          "description": "Valid SQL query to answer the question"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.12",
+      "dspy": "3.0.4",
+      "cloudpickle": "3.1"
+    }
+  }
+}

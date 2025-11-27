@@ -2,23 +2,26 @@ import dspy
 from typing import List
 
 
-# Configure DSPy to use local Ollama model
+# Configure DSPy to use local Ollama model with phi3.5
 try:
-    # Try newer DSPy API
     lm = dspy.Ollama(
-        model="phi3.5:3.8b-mini-instruct-q4_K_M",
+        model="phi3.5",
         base_url="http://localhost:11434",
-        max_tokens=2000
+        max_tokens=8000,
+        temperature=0.0,  # Deterministic for consistency
+        stop=["\n\n\n"]  # Stop generation at excessive newlines
     )
-except AttributeError:
-    # Fallback to alternative naming
+except (AttributeError, TypeError):
+    # Fallback configuration
     lm = dspy.LM(
-        model="ollama/phi3.5:3.8b-mini-instruct-q4_K_M",
+        model="ollama/phi3.5",
         api_base="http://localhost:11434",
-        max_tokens=2000
+        max_tokens=8000,
+        temperature=0.0
     )
 
 dspy.settings.configure(lm=lm)
+print("DSPy configured with phi3.5 model")
 
 
 class RouterSignature(dspy.Signature):
@@ -57,6 +60,7 @@ class RouterModule(dspy.Module):
     
     def __init__(self):
         super().__init__()
+        # Use Predict instead of ChainOfThought for simpler output
         self.router = dspy.Predict(RouterSignature)
     
     def forward(self, question: str) -> str:
@@ -69,8 +73,11 @@ class RouterModule(dspy.Module):
         Returns:
             Tool choice: 'rag', 'sql', or 'hybrid'
         """
-        result = self.router(question=question)
-        return result.tool_choice
+        try:
+            result = self.router(question=question)
+            return result.tool_choice if hasattr(result, 'tool_choice') else "hybrid"
+        except:
+            return "hybrid"
 
 
 class SQLGeneratorModule(dspy.Module):
@@ -85,12 +92,17 @@ class SQLGeneratorModule(dspy.Module):
             "sql_gen_optimized.json"
         )
         
+        # Use Predict for better local model compatibility
         if os.path.exists(optimized_path):
             print(f"Loading optimized SQL Generator from {optimized_path}")
-            self.generator = dspy.ChainOfThought(SQLGeneratorSignature)
-            self.generator.load(optimized_path)
+            try:
+                self.generator = dspy.ChainOfThought(SQLGeneratorSignature)
+                self.generator.load(optimized_path)
+            except:
+                self.generator = dspy.Predict(SQLGeneratorSignature)
         else:
-            self.generator = dspy.ChainOfThought(SQLGeneratorSignature)
+            # Use Predict instead of ChainOfThought for local models
+            self.generator = dspy.Predict(SQLGeneratorSignature)
     
     def forward(self, question: str, schema: str, constraints: str = "") -> str:
         """
@@ -104,12 +116,16 @@ class SQLGeneratorModule(dspy.Module):
         Returns:
             SQL query string
         """
-        result = self.generator(
-            question=question,
-            schema=schema,
-            constraints=constraints
-        )
-        return result.sql_query
+        try:
+            result = self.generator(
+                question=question,
+                schema=schema,
+                constraints=constraints
+            )
+            return result.sql_query if hasattr(result, 'sql_query') else "SELECT 1"
+        except Exception as e:
+            print(f"SQL generation failed: {e}")
+            return "SELECT 1"
 
 
 class SynthesizerModule(dspy.Module):
@@ -117,7 +133,8 @@ class SynthesizerModule(dspy.Module):
     
     def __init__(self):
         super().__init__()
-        self.synthesizer = dspy.ChainOfThought(SynthesizerSignature)
+        # Use Predict for better local model compatibility
+        self.synthesizer = dspy.Predict(SynthesizerSignature)
     
     def forward(
         self, 
@@ -141,14 +158,21 @@ class SynthesizerModule(dspy.Module):
         if context is None:
             context = []
         
-        result = self.synthesizer(
-            question=question,
-            sql_data=sql_data,
-            context=context,
-            format_hint=format_hint
-        )
-        
-        return {
-            "final_answer": result.final_answer,
-            "explanation": result.explanation
-        }
+        try:
+            result = self.synthesizer(
+                question=question,
+                sql_data=sql_data,
+                context=context,
+                format_hint=format_hint
+            )
+            
+            return {
+                "final_answer": result.final_answer if hasattr(result, 'final_answer') else "No answer generated",
+                "explanation": result.explanation if hasattr(result, 'explanation') else "Unable to explain"
+            }
+        except Exception as e:
+            print(f"Synthesis failed: {e}")
+            return {
+                "final_answer": "Error generating answer",
+                "explanation": str(e)
+            }
