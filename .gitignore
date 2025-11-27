@@ -8,3 +8,5 @@ __pycache__/
 # Optional caches related to testing/type checking
 .pytest_cache/
 .mypy_cache/
+
+/models

@@ -29,7 +29,7 @@ class AgentState(TypedDict):
 
 # Initialize tools and modules
 retriever = LocalRetriever(docs_path="docs/")
-db_tool = SQLiteTool(db_path="data/northwind.sqlite")
+db_tool = SQLiteTool(db_path="agent/rag/northwind.db")
 router_module = RouterModule()
 sql_generator = SQLGeneratorModule()
 synthesizer = SynthesizerModule()
@@ -77,7 +77,7 @@ def sql_gen_node(state: AgentState) -> AgentState:
         schema = db_tool.get_schema()
         
         # Build constraints including error feedback if exists
-        constraints = "Use standard SQL syntax. Table names with spaces use [brackets]. Join tables appropriately."
+        constraints = "Use SQLite syntax. Table names with spaces use [brackets]. Join tables appropriately. For date functions, use strftime (e.g., strftime('%Y', OrderDate) for year)."
         
         # If there was a previous error, include it in the context
         if state.get("sql_result") and state["sql_result"].get("error"):
@@ -91,7 +91,15 @@ def sql_gen_node(state: AgentState) -> AgentState:
             constraints=constraints
         )
         
-        # Clean up the SQL query
+        # Clean up the SQL query - remove markdown code blocks and extra whitespace
+        sql_query = sql_query.strip()
+        # Remove markdown SQL code blocks
+        if sql_query.startswith("```sql"):
+            sql_query = sql_query[6:]  # Remove ```sql
+        if sql_query.startswith("```"):
+            sql_query = sql_query[3:]  # Remove ```
+        if sql_query.endswith("```"):
+            sql_query = sql_query[:-3]  # Remove trailing ```
         sql_query = sql_query.strip()
         
         state["sql_query"] = sql_query
@@ -107,8 +115,16 @@ def sql_gen_node(state: AgentState) -> AgentState:
 def executor_node(state: AgentState) -> AgentState:
     """Execute the SQL query."""
     sql_query = state["sql_query"]
+    print(f"\nExecuting SQL: {sql_query}")
     result = db_tool.execute_query(sql_query)
+    print(f"SQL Result: {result}")
     state["sql_result"] = result
+    
+    # Track error count
+    if result.get("error"):
+        state["error_count"] = state.get("error_count", 0) + 1
+        print(f"SQL Error (attempt {state['error_count']}): {result.get('error')}")
+    
     return state
 
 
@@ -205,12 +221,15 @@ def route_after_executor(state: AgentState) -> Literal["sql_gen_node", "synthesi
     has_error = bool(state["sql_result"].get("error"))
     error_count = state.get("error_count", 0)
     
+    print(f"\nRoute decision: has_error={has_error}, error_count={error_count}")
+    
     if has_error and error_count < 2:
-        # Increment error count and retry
-        state["error_count"] = error_count + 1
+        # Retry SQL generation
+        print("-> Retrying SQL generation")
         return "sql_gen_node"
     else:
         # Proceed to synthesis
+        print("-> Proceeding to synthesizer")
         return "synthesizer_node"
 
 

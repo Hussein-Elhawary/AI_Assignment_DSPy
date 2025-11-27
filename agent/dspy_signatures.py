@@ -1,27 +1,82 @@
 import dspy
-from typing import List
+from typing import List, Optional, Any
+from llama_cpp import Llama
 
 
-# Configure DSPy to use local Ollama model with phi3.5
-try:
-    lm = dspy.Ollama(
-        model="phi3.5",
-        base_url="http://localhost:11434",
-        max_tokens=8000,
-        temperature=0.0,  # Deterministic for consistency
-        stop=["\n\n\n"]  # Stop generation at excessive newlines
-    )
-except (AttributeError, TypeError):
-    # Fallback configuration
-    lm = dspy.LM(
-        model="ollama/phi3.5",
-        api_base="http://localhost:11434",
-        max_tokens=8000,
-        temperature=0.0
-    )
+# Load the GGUF model using llama-cpp-python
+llama_model = Llama(
+    model_path="models/phi3.5.gguf",
+    n_ctx=4096,           # Context window
+    n_gpu_layers=0,       # CPU only (set to -1 for full GPU)
+    verbose=False,        # Reduce logging
+    n_threads=4           # Number of CPU threads
+)
 
+
+# Create a DSPy-compatible LM class
+class LlamaCppLM(dspy.BaseLM):
+    """DSPy-compatible wrapper for llama-cpp-python."""
+    
+    def __init__(self, model, model_name="phi3.5"):
+        self.llama_model = model
+        self.model_name = model_name
+        self.history = []
+        self.provider = "llama-cpp"
+        self.kwargs = {
+            "temperature": 0.7,
+            "max_tokens": 2000,
+            "top_p": 0.95,
+            "stop": ["<|end|>", "<|endoftext|>", "</s>"]
+        }
+        # Initialize parent class with model name
+        super().__init__(model=model_name)
+    
+    def basic_request(self, prompt: str, **kwargs) -> dict:
+        """Generate completion for the given prompt."""
+        # Merge default kwargs with provided ones
+        generation_kwargs = {**self.kwargs, **kwargs}
+        
+        # Format prompt for Phi-3.5 instruct model
+        formatted_prompt = f"<|user|>\n{prompt}<|end|>\n<|assistant|>\n"
+        
+        # Generate response
+        response = self.llama_model(
+            formatted_prompt,
+            max_tokens=generation_kwargs.get('max_tokens', 2000),
+            temperature=generation_kwargs.get('temperature', 0.7),
+            top_p=generation_kwargs.get('top_p', 0.95),
+            stop=generation_kwargs.get('stop', ["<|end|>", "</s>"]),
+            echo=False
+        )
+        
+        # Extract text from response
+        text = response['choices'][0]['text'].strip()
+        
+        # DSPy expects 'prompt' field in the response for completion models
+        return {
+            "choices": [{
+                "text": text,
+                "message": {"content": text, "role": "assistant"}
+            }],
+            "usage": response.get('usage', {})
+        }
+    
+    def __call__(self, prompt=None, messages=None, **kwargs):
+        """DSPy interface for generation."""
+        if prompt is None and messages:
+            # Handle messages format
+            prompt = messages[-1].get('content', '') if isinstance(messages, list) else str(messages)
+        elif prompt is None:
+            prompt = ""
+            
+        response = self.basic_request(prompt, **kwargs)
+        return [choice["text"] for choice in response["choices"]]
+
+
+# Configure DSPy with the wrapped model
+lm = LlamaCppLM(llama_model, model_name="phi3.5")
 dspy.settings.configure(lm=lm)
-print("DSPy configured with phi3.5 model")
+print("DSPy configured with llama-cpp-python using models/phi3.5.gguf")
 
 
 class RouterSignature(dspy.Signature):
